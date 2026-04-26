@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Filter, SortDesc, Loader2, CheckCircle2, Download, BarChart3, ArrowRight } from 'lucide-react';
+import { Plus, Filter, SortDesc, Loader2, CheckCircle2, Download, BarChart3, ArrowRight, Edit3 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface Expense {
@@ -20,6 +20,10 @@ export default function ExpenseTracker() {
   const [submitting, setSubmitting] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [sortOrder, setSortOrder] = useState('date_desc');
+  
+  // New State for Budgeting
+  const [totalBudget, setTotalBudget] = useState(50000); 
+  const [isEditingBudget, setIsEditingBudget] = useState(false);
 
   useEffect(() => {
     fetchExpenses();
@@ -77,15 +81,19 @@ export default function ExpenseTracker() {
   }
 
   const stats = useMemo(() => {
-    const total = expenses.reduce((acc, curr) => acc + (curr.amount / 100), 0);
+    const totalExpenses = expenses.reduce((acc, curr) => acc + (curr.amount / 100), 0);
+    const availableBudget = totalBudget - totalExpenses;
+    
     const dailyMap = expenses.reduce((acc: any, curr) => {
       const day = formatDate(curr.date);
       acc[day] = (acc[day] || 0) + (curr.amount / 100);
       return acc;
     }, {});
+    
     const chartData = Object.keys(dailyMap).map(date => ({ date, amount: dailyMap[date] })).reverse().slice(-7);
-    return { total, chartData };
-  }, [expenses]);
+    
+    return { totalExpenses, availableBudget, chartData };
+  }, [expenses, totalBudget]);
 
   const exportToCSV = () => {
     const headers = ['Date,Category,Description,Amount(₹)'];
@@ -113,25 +121,56 @@ export default function ExpenseTracker() {
             <h1 className="text-4xl md:text-5xl font-semibold tracking-tight leading-[1.1]">
               Track every rupee with <span className="bg-[#DCEAE0] px-2 rounded-lg whitespace-nowrap">clear intent</span>
             </h1>
-            <p className="mt-4 text-[#6B7370] text-lg">
-              Precision accounting for the modern CFO. Secure, idempotent, and highly visual.
-            </p>
           </div>
         </header>
+
+        {/* HERO METRICS GRID */}
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* TOTAL BUDGET (Editable) */}
+          <div className="bg-white border border-gray-200/70 p-6 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] relative group">
+            <p className="text-[#6B7370] text-[10px] font-bold tracking-widest uppercase mb-1 flex justify-between items-center">
+              Total Budget
+              <button onClick={() => setIsEditingBudget(!isEditingBudget)} className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <Edit3 className="w-3 h-3 text-[#0F6E56]" />
+              </button>
+            </p>
+            {isEditingBudget ? (
+              <input 
+                autoFocus
+                type="number"
+                value={totalBudget}
+                onChange={(e) => setTotalBudget(Number(e.target.value))}
+                onBlur={() => setIsEditingBudget(false)}
+                className="text-2xl font-semibold text-[#1A2E2A] bg-[#F7F8F5] rounded w-full outline-none px-2"
+              />
+            ) : (
+              <p className="text-3xl font-semibold tabular-nums">{formatCurrency(totalBudget)}</p>
+            )}
+          </div>
+
+          {/* TOTAL EXPENSES */}
+          <div className="bg-[#DCEAE0] p-6 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <p className="text-[#0F6E56] text-[10px] font-bold tracking-widest uppercase mb-1">Spent So Far</p>
+            <p className="text-3xl font-semibold tabular-nums text-[#0F6E56]">{formatCurrency(stats.totalExpenses)}</p>
+          </div>
+
+          {/* AVAILABLE BUDGET */}
+          <div className={`p-6 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] border transition-colors ${stats.availableBudget < 0 ? 'bg-red-50 border-red-100' : 'bg-white border-gray-200/70'}`}>
+            <p className={`${stats.availableBudget < 0 ? 'text-red-600' : 'text-[#6B7370]'} text-[10px] font-bold tracking-widest uppercase mb-1`}>
+              Available Balance
+            </p>
+            <p className={`text-3xl font-semibold tabular-nums ${stats.availableBudget < 0 ? 'text-red-600' : 'text-[#0F6E56]'}`}>
+              {formatCurrency(stats.availableBudget)}
+            </p>
+          </div>
+        </section>
 
         <hr className="border-gray-200/60" />
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
           
-          {/* COLUMN 1: METRICS & ENTRY */}
+          {/* FORM COLUMN */}
           <section className="lg:col-span-5 space-y-10">
-            <div className="bg-[#DCEAE0] p-8 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-              <p className="text-[#0F6E56] text-xs font-semibold tracking-widest uppercase mb-1">Total Expenses</p>
-              <p className="text-4xl md:text-5xl font-semibold tabular-nums text-[#0F6E56]">
-                {formatCurrency(stats.total)}
-              </p>
-            </div>
-
             <div className="bg-[#DCEAE0] p-8 rounded-2xl space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-[#0F6E56] text-xs font-semibold tracking-wider uppercase">Record Transaction</h2>
@@ -144,9 +183,9 @@ export default function ExpenseTracker() {
                     name="amount" type="number" step="0.01" min="0.01" 
                     onKeyDown={(e) => { if (e.key === '-') e.preventDefault(); }}
                     placeholder="Amount (₹)"
-                    required className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#0F6E56]/20 focus:border-[#0F6E56] transition-all text-sm" 
+                    required className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#0F6E56]/20 focus:border-[#0F6E56] transition-all text-sm font-mono" 
                   />
-                  <select name="category" required className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#0F6E56]/20 focus:border-[#0F6E56] text-sm font-medium">
+                  <select name="category" required className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#0F6E56]/20 focus:border-[#0F6E56] text-sm font-semibold">
                     <option value="Food">Food</option>
                     <option value="Transport">Transport</option>
                     <option value="Rent">Rent</option>
@@ -154,7 +193,7 @@ export default function ExpenseTracker() {
                   </select>
                 </div>
                 <input name="description" placeholder="Description" required className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#0F6E56]/20 focus:border-[#0F6E56] text-sm" />
-                <input name="date" type="date" required className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#0F6E56]/20 focus:border-[#0F6E56] text-sm" defaultValue={new Date().toISOString().split('T')[0]} />
+                <input name="date" type="date" required className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#0F6E56]/20 focus:border-[#0F6E56] text-sm font-mono" defaultValue={new Date().toISOString().split('T')[0]} />
                 <button disabled={submitting} className="w-full bg-[#1A2E2A] text-white py-3.5 rounded-lg font-medium transition-all hover:opacity-90 active:scale-[0.99] flex justify-center items-center gap-2">
                   {submitting ? <Loader2 className="animate-spin w-4 h-4" /> : "Log Entry"}
                 </button>
@@ -162,10 +201,8 @@ export default function ExpenseTracker() {
             </div>
           </section>
 
-          {/* COLUMN 2: LINE CHART & LEDGER */}
+          {/* LIST & CHART COLUMN */}
           <section className="lg:col-span-7 space-y-8">
-            
-            {/* UPDATED: AREA/LINE CHART */}
             <div className="bg-white border border-gray-200/70 p-8 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-6">
               <div className="flex justify-between items-center">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-[#6B7370] flex items-center gap-2">
@@ -180,43 +217,29 @@ export default function ExpenseTracker() {
                   <AreaChart data={stats.chartData}>
                     <defs>
                       <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#0F6E56" stopOpacity={0.1}/>
+                        <stop offset="5%" stopColor="#0F6E56" stopOpacity={0.15}/>
                         <stop offset="95%" stopColor="#0F6E56" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
                     <XAxis dataKey="date" hide />
                     <YAxis hide domain={['auto', 'auto']} />
-                    <Tooltip 
-                      cursor={{ stroke: '#DCEAE0', strokeWidth: 2 }} 
-                      contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '8px', fontSize: '11px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }} 
-                    />
-                    <Area 
-                      type="monotone" 
-                      dataKey="amount" 
-                      stroke="#0F6E56" 
-                      strokeWidth={3}
-                      fillOpacity={1} 
-                      fill="url(#colorAmount)" 
-                      animationDuration={1500}
-                    />
+                    <Tooltip cursor={{ stroke: '#DCEAE0', strokeWidth: 2 }} contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '8px', fontSize: '11px' }} />
+                    <Area type="monotone" dataKey="amount" stroke="#0F6E56" strokeWidth={3} fillOpacity={1} fill="url(#colorAmount)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* LEDGER FEED */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold tracking-tight">Recent Activity</h3>
                 <div className="flex items-center gap-4">
                   <select onChange={(e) => setCategoryFilter(e.target.value)} className="bg-transparent text-xs font-semibold text-[#0F6E56] border-b border-[#DCEAE0] outline-none py-1 hover:border-[#0F6E56] transition-all cursor-pointer uppercase">
-                    <option value="All">All Categories</option>
+                    <option value="All">All Tiers</option>
                     <option value="Food">Food</option>
                     <option value="Transport">Transport</option>
-                  </select>
-                  <select onChange={(e) => setSortOrder(e.target.value)} className="bg-transparent text-xs font-semibold text-[#0F6E56] border-b border-[#DCEAE0] outline-none py-1 hover:border-[#0F6E56] transition-all cursor-pointer uppercase">
-                    <option value="date_desc">Newest</option>
-                    <option value="date_asc">Oldest</option>
+                    <option value="Rent">Rent</option>
+                    <option value="Utilities">Utilities</option>
                   </select>
                 </div>
               </div>
@@ -225,9 +248,7 @@ export default function ExpenseTracker() {
                 <div className="divide-y divide-gray-100">
                   <AnimatePresence mode="popLayout">
                     {loading ? (
-                       <div className="py-24 text-center text-[#6B7370] text-sm font-medium animate-pulse">Syncing...</div>
-                    ) : expenses.length === 0 ? (
-                       <div className="py-24 text-center text-[#6B7370] text-sm font-medium">Vault Empty.</div>
+                       <div className="py-24 text-center text-[#6B7370] text-sm animate-pulse">Synchronizing Ledger...</div>
                     ) : (
                       expenses.map((expense) => (
                         <motion.div 
@@ -245,10 +266,10 @@ export default function ExpenseTracker() {
                             <div className="flex items-center gap-2 text-[#6B7370] text-[10px] uppercase font-bold tracking-wider">
                               {formatDate(expense.date)}
                               <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                              <CheckCircle2 className="w-2.5 h-2.5 text-[#0F6E56]/30" />
+                              <CheckCircle2 className="w-2.5 h-2.5 text-[#0F6E56]/30" /> Verified
                             </div>
                           </div>
-                          <p className="text-lg font-semibold tabular-nums">
+                          <p className="text-lg font-semibold tabular-nums tracking-tight text-[#1A2E2A]">
                             {formatCurrency(expense.amount / 100)}
                           </p>
                         </motion.div>
