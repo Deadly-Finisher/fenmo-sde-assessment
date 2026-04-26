@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Filter, SortDesc, Loader2, Wallet, Activity, CheckCircle2, Download, BarChart3, ArrowRight } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { Plus, Filter, SortDesc, Loader2, CheckCircle2, Download, BarChart3, ArrowRight } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface Expense {
   id: string;
@@ -43,11 +43,18 @@ export default function ExpenseTracker() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (submitting) return;
-    setSubmitting(true);
-    
+
     const formData = new FormData(e.currentTarget);
+    const amountVal = formData.get('amount') as string;
+    
+    if (parseFloat(amountVal) <= 0) {
+      alert("Please enter a positive amount.");
+      return;
+    }
+
+    setSubmitting(true);
     const payload = {
-      amount: formData.get('amount'),
+      amount: amountVal,
       category: formData.get('category'),
       description: formData.get('description'),
       date: formData.get('date'),
@@ -86,7 +93,7 @@ export default function ExpenseTracker() {
     const csvContent = "data:text/csv;charset=utf-8," + headers.concat(rows).join("\n");
     const link = document.createElement("a");
     link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", "ledger_export.csv");
+    link.setAttribute("download", `vault_export_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -98,16 +105,16 @@ export default function ExpenseTracker() {
         
         {/* HERO SECTION */}
         <header className="space-y-4">
-          <div className="inline-flex items-center gap-2 bg-[#DCEAE0] text-[#0F6E56] px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 bg-[#DCEAE0] text-[#0F6E56] px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">
             <span className="w-1.5 h-1.5 bg-[#0F6E56] rounded-full animate-pulse" />
-            Personal Finance
+            Fintech Ledger
           </div>
           <div className="max-w-2xl">
             <h1 className="text-4xl md:text-5xl font-semibold tracking-tight leading-[1.1]">
               Track every rupee with <span className="bg-[#DCEAE0] px-2 rounded-lg whitespace-nowrap">clear intent</span>
             </h1>
-            <p className="mt-4 text-[#6B7370] text-lg max-w-lg">
-              A minimalist command center for your expenditures. Built for precision and financial clarity.
+            <p className="mt-4 text-[#6B7370] text-lg">
+              Precision accounting for the modern CFO. Secure, idempotent, and highly visual.
             </p>
           </div>
         </header>
@@ -116,10 +123,8 @@ export default function ExpenseTracker() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
           
-          {/* LEFT COLUMN: TOTAL & FORM */}
+          {/* COLUMN 1: METRICS & ENTRY */}
           <section className="lg:col-span-5 space-y-10">
-            
-            {/* TOTAL METRIC CARD */}
             <div className="bg-[#DCEAE0] p-8 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
               <p className="text-[#0F6E56] text-xs font-semibold tracking-widest uppercase mb-1">Total Expenses</p>
               <p className="text-4xl md:text-5xl font-semibold tabular-nums text-[#0F6E56]">
@@ -127,7 +132,6 @@ export default function ExpenseTracker() {
               </p>
             </div>
 
-            {/* FORM CARD */}
             <div className="bg-[#DCEAE0] p-8 rounded-2xl space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-[#0F6E56] text-xs font-semibold tracking-wider uppercase">Record Transaction</h2>
@@ -140,7 +144,7 @@ export default function ExpenseTracker() {
                     name="amount" type="number" step="0.01" min="0.01" 
                     onKeyDown={(e) => { if (e.key === '-') e.preventDefault(); }}
                     placeholder="Amount (₹)"
-                    required className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#0F6E56]/20 focus:border-[#0F6E56] transition-all tabular-nums text-sm" 
+                    required className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#0F6E56]/20 focus:border-[#0F6E56] transition-all text-sm" 
                   />
                   <select name="category" required className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#0F6E56]/20 focus:border-[#0F6E56] text-sm font-medium">
                     <option value="Food">Food</option>
@@ -151,62 +155,68 @@ export default function ExpenseTracker() {
                 </div>
                 <input name="description" placeholder="Description" required className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#0F6E56]/20 focus:border-[#0F6E56] text-sm" />
                 <input name="date" type="date" required className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#0F6E56]/20 focus:border-[#0F6E56] text-sm" defaultValue={new Date().toISOString().split('T')[0]} />
-                <button 
-                  disabled={submitting} 
-                  className="w-full bg-[#1A2E2A] text-white py-3.5 rounded-lg font-medium transition-all hover:bg-[#1A2E2A]/90 active:translate-y-0.5 flex justify-center items-center gap-2"
-                >
+                <button disabled={submitting} className="w-full bg-[#1A2E2A] text-white py-3.5 rounded-lg font-medium transition-all hover:opacity-90 active:scale-[0.99] flex justify-center items-center gap-2">
                   {submitting ? <Loader2 className="animate-spin w-4 h-4" /> : "Log Entry"}
                 </button>
               </form>
             </div>
           </section>
 
-          {/* RIGHT COLUMN: ANALYTICS & LIST */}
+          {/* COLUMN 2: LINE CHART & LEDGER */}
           <section className="lg:col-span-7 space-y-8">
             
-            {/* ANALYTICS SECTION */}
+            {/* UPDATED: AREA/LINE CHART */}
             <div className="bg-white border border-gray-200/70 p-8 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-6">
               <div className="flex justify-between items-center">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-[#6B7370] flex items-center gap-2">
                   <BarChart3 className="w-3.5 h-3.5 text-[#0F6E56]" /> Spend Velocity
                 </h3>
-                <button onClick={exportToCSV} className="text-[10px] font-bold uppercase tracking-widest text-[#6B7370] hover:text-[#1A2E2A] transition-colors border border-gray-200 px-3 py-1 rounded-full flex items-center gap-2">
+                <button onClick={exportToCSV} className="text-[10px] font-bold uppercase tracking-widest text-[#6B7370] hover:text-[#1A2E2A] border border-gray-200 px-3 py-1 rounded-full flex items-center gap-2 transition-colors">
                   <Download className="w-3 h-3" /> Export CSV
                 </button>
               </div>
-              <div className="h-[160px] w-full">
+              <div className="h-[180px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.chartData}>
+                  <AreaChart data={stats.chartData}>
+                    <defs>
+                      <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0F6E56" stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor="#0F6E56" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
                     <XAxis dataKey="date" hide />
-                    <Tooltip cursor={{fill: '#F7F8F5'}} contentStyle={{backgroundColor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '8px', fontSize: '11px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'}} />
-                    <Bar dataKey="amount">
-                      {stats.chartData.map((_, i) => <Cell key={i} fill={i === stats.chartData.length - 1 ? '#0F6E56' : '#DCEAE0'} />)}
-                    </Bar>
-                  </BarChart>
+                    <YAxis hide domain={['auto', 'auto']} />
+                    <Tooltip 
+                      cursor={{ stroke: '#DCEAE0', strokeWidth: 2 }} 
+                      contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '8px', fontSize: '11px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }} 
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="amount" 
+                      stroke="#0F6E56" 
+                      strokeWidth={3}
+                      fillOpacity={1} 
+                      fill="url(#colorAmount)" 
+                      animationDuration={1500}
+                    />
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* CONTROLS & TABLE */}
+            {/* LEDGER FEED */}
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold tracking-tight">Recent Activity</h3>
-                <div className="flex items-center gap-3">
-                  <select 
-                    onChange={(e) => setCategoryFilter(e.target.value)} 
-                    className="bg-transparent text-xs font-semibold text-[#0F6E56] border-b-2 border-[#DCEAE0] outline-none py-1 focus:border-[#0F6E56] transition-all cursor-pointer uppercase tracking-widest"
-                  >
+                <div className="flex items-center gap-4">
+                  <select onChange={(e) => setCategoryFilter(e.target.value)} className="bg-transparent text-xs font-semibold text-[#0F6E56] border-b border-[#DCEAE0] outline-none py-1 hover:border-[#0F6E56] transition-all cursor-pointer uppercase">
                     <option value="All">All Categories</option>
                     <option value="Food">Food</option>
                     <option value="Transport">Transport</option>
-                    <option value="Rent">Rent</option>
                   </select>
-                  <select 
-                    onChange={(e) => setSortOrder(e.target.value)} 
-                    className="bg-transparent text-xs font-semibold text-[#0F6E56] border-b-2 border-[#DCEAE0] outline-none py-1 focus:border-[#0F6E56] transition-all cursor-pointer uppercase tracking-widest"
-                  >
+                  <select onChange={(e) => setSortOrder(e.target.value)} className="bg-transparent text-xs font-semibold text-[#0F6E56] border-b border-[#DCEAE0] outline-none py-1 hover:border-[#0F6E56] transition-all cursor-pointer uppercase">
                     <option value="date_desc">Newest</option>
-                    <option value="date_asc">Archive</option>
+                    <option value="date_asc">Oldest</option>
                   </select>
                 </div>
               </div>
@@ -215,32 +225,30 @@ export default function ExpenseTracker() {
                 <div className="divide-y divide-gray-100">
                   <AnimatePresence mode="popLayout">
                     {loading ? (
-                       <div className="py-24 text-center text-[#6B7370] text-sm animate-pulse font-medium">Syncing Ledger...</div>
+                       <div className="py-24 text-center text-[#6B7370] text-sm font-medium animate-pulse">Syncing...</div>
                     ) : expenses.length === 0 ? (
-                       <div className="py-24 text-center text-[#6B7370] text-sm font-medium">No records identified in current view.</div>
+                       <div className="py-24 text-center text-[#6B7370] text-sm font-medium">Vault Empty.</div>
                     ) : (
                       expenses.map((expense) => (
                         <motion.div 
-                          layout 
-                          initial={{ opacity: 0 }} 
-                          animate={{ opacity: 1 }} 
+                          layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} 
                           key={expense.id} 
-                          className="group p-5 flex justify-between items-center transition-colors hover:bg-[#F7F8F5]"
+                          className="group p-5 flex justify-between items-center hover:bg-[#F7F8F5] transition-colors"
                         >
-                          <div className="flex flex-col gap-1.5">
+                          <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-3">
-                              <span className="bg-[#DCEAE0] text-[#0F6E56] px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                              <span className="bg-[#DCEAE0] text-[#0F6E56] px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider">
                                 {expense.category}
                               </span>
-                              <p className="font-semibold text-[15px]">{expense.description}</p>
+                              <p className="font-semibold text-sm">{expense.description}</p>
                             </div>
-                            <div className="flex items-center gap-2 text-[#6B7370] text-xs">
+                            <div className="flex items-center gap-2 text-[#6B7370] text-[10px] uppercase font-bold tracking-wider">
                               {formatDate(expense.date)}
                               <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                              <CheckCircle2 className="w-3 h-3 text-[#0F6E56]/40" />
+                              <CheckCircle2 className="w-2.5 h-2.5 text-[#0F6E56]/30" />
                             </div>
                           </div>
-                          <p className="text-lg font-semibold tabular-nums tracking-tight">
+                          <p className="text-lg font-semibold tabular-nums">
                             {formatCurrency(expense.amount / 100)}
                           </p>
                         </motion.div>
