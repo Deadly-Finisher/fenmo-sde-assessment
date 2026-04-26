@@ -2,52 +2,56 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Filter, SortDesc, Loader2, Wallet, Activity, CheckCircle2, Download, BarChart3 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+
+interface Expense {
+  id: string;
+  amount: number;
+  category: string;
+  description: string;
+  date: string;
+}
 
 export default function ExpenseTracker() {
-  interface Expense {
-    id: string;
-    amount: number;
-    category: string;
-    description: string;
-    date: string;
-    createdAt: string;
-  }
-
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [sortOrder, setSortOrder] = useState('date_desc');
 
-  // Load data on start and whenever filters/sorting change
   useEffect(() => {
     fetchExpenses();
   }, [categoryFilter, sortOrder]);
 
   async function fetchExpenses() {
-    setLoading(true);
-    const url = `/api/expenses?${categoryFilter !== 'All' ? `category=${categoryFilter}&` : ''}sort=${sortOrder}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    setExpenses(Array.isArray(data) ? data : []);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const categoryParam = categoryFilter !== 'All' ? `category=${categoryFilter}&` : '';
+      const url = `/api/expenses?${categoryParam}sort=${sortOrder}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      setExpenses(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Fetch failed");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (submitting) return; // Prevent double-submits
-
+    if (submitting) return;
     setSubmitting(true);
-    const formData = new FormData(e.currentTarget);
     
-    // Data payload with Idempotency Key
+    const formData = new FormData(e.currentTarget);
     const payload = {
       amount: formData.get('amount'),
       category: formData.get('category'),
       description: formData.get('description'),
       date: formData.get('date'),
-      clientReferenceId: crypto.randomUUID(), // Handles network retries/page reloads 
+      clientReferenceId: crypto.randomUUID(), 
     };
 
     try {
@@ -56,279 +60,145 @@ export default function ExpenseTracker() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
       if (res.ok) {
         (e.target as HTMLFormElement).reset();
-        fetchExpenses();
+        await fetchExpenses();
       }
     } finally {
       setSubmitting(false);
     }
   }
 
-  // Derived Data for Analytics
   const stats = useMemo(() => {
-    const total = expenses.reduce((acc, curr: any) => acc + (curr.amount / 100), 0);
-    const categoryMap = expenses.reduce((acc: any, curr: any) => {
-      acc[curr.category] = (acc[curr.category] || 0) + (curr.amount / 100);
+    const total = expenses.reduce((acc, curr) => acc + (curr.amount / 100), 0);
+    const dailyMap = expenses.reduce((acc: any, curr) => {
+      const day = formatDate(curr.date);
+      acc[day] = (acc[day] || 0) + (curr.amount / 100);
       return acc;
     }, {});
-    
-    const chartData = Object.keys(categoryMap).map(name => ({
-      name,
-      value: categoryMap[name]
-    }));
-
-    const topCategory = chartData.sort((a, b) => b.value - a.value)[0]?.name || 'N/A';
-
-    return { total, chartData, topCategory };
+    const chartData = Object.keys(dailyMap).map(date => ({ date, amount: dailyMap[date] })).reverse().slice(-7);
+    return { total, chartData };
   }, [expenses]);
 
-  const COLORS = ['#0F6E56', '#1A2E2A', '#6B7370', '#DCEAE0', '#8B9D96'];
-
-  const categories = ['All', 'Food', 'Transport', 'Rent', 'Entertainment', 'Utilities'];
+  const exportToCSV = () => {
+    const headers = ['Date,Category,Description,Amount($)'];
+    const rows = expenses.map((e) => `${formatDate(e.date)},${e.category},"${e.description}",${(e.amount / 100).toFixed(2)}`);
+    const csvContent = "data:text/csv;charset=utf-8," + headers.concat(rows).join("\n");
+    const link = document.createElement("a");
+    link.setAttribute("href", encodeURI(csvContent));
+    link.setAttribute("download", "ledger_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
-    <main className="min-h-screen bg-[#F7F8F5] text-[#1A2E2A]">
-      <div className="max-w-5xl mx-auto px-6 py-12 space-y-10">
-        
-        {/* Hero Section */}
-        <header className="space-y-4">
-          <div className="inline-flex items-center gap-2 bg-[#DCEAE0] text-[#0F6E56] px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide">
-            <span className="w-1.5 h-1.5 bg-[#0F6E56] rounded-full"></span>
-            Personal Finance
+    <div className="min-h-screen bg-[#09090b] text-zinc-100 p-6 md:p-12 font-sans selection:bg-blue-500/30">
+      <div className="max-w-5xl mx-auto space-y-12">
+        <header className="flex justify-between items-end border-b border-zinc-800 pb-8">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-blue-500 font-mono text-[10px] uppercase tracking-widest">
+              <div className="h-1.5 w-1.5 bg-blue-500 rounded-full animate-pulse" /> Vault Online
+            </div>
+            <h1 className="text-4xl font-bold italic tracking-tighter">FinanceFlow<span className="text-blue-600">.</span></h1>
           </div>
-          <h1 className="text-4xl md:text-5xl font-semibold tracking-tight leading-tight">
-            Track every rupee{' '}
-            <span className="bg-[#DCEAE0] text-[#0F6E56] px-3 py-1 rounded-xl">with intent</span>
-          </h1>
-          <p className="text-[#6B7370] text-lg max-w-2xl leading-relaxed">
-            A resilient tool for tracking personal expenditures with clarity and precision.
-          </p>
+          <div className="flex flex-col items-end gap-2">
+            <button onClick={exportToCSV} className="flex items-center gap-2 text-[9px] font-black uppercase text-zinc-500 hover:text-white border border-zinc-800 px-3 py-1 rounded-full transition-all">
+              <Download className="w-3 h-3" /> Export Ledger
+            </button>
+            <div className="text-right font-mono">
+               <p className="text-zinc-500 text-[10px] uppercase font-black">Global Assets</p>
+               <p className="text-3xl font-bold">{formatCurrency(stats.total)}</p>
+            </div>
+          </div>
         </header>
 
-        <div className="border-t border-gray-200/60"></div>
-
-        {/* Analytics Overview Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Total Expenses - Hero Metric */}
-          <div className="bg-[#DCEAE0] rounded-2xl p-6 flex flex-col justify-between">
-            <p className="text-[#0F6E56] font-semibold uppercase text-xs tracking-wider">Total Expenses</p>
-            <p className="text-4xl font-semibold text-[#0F6E56] mt-3 tabular-nums">
-              {formatCurrency(stats.total)}
-            </p>
-          </div>
-          
-          <div className="bg-white border border-gray-200/60 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-6 flex flex-col justify-between">
-            <p className="text-[#6B7370] font-semibold uppercase text-xs tracking-wider">Transactions</p>
-            <p className="text-3xl font-semibold mt-3 text-[#1A2E2A] tabular-nums">{expenses.length}</p>
-            <p className="text-sm text-[#6B7370] mt-1">Currently filtered list</p>
-          </div>
-
-          <div className="bg-white border border-gray-200/60 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-6 flex flex-col justify-between">
-            <p className="text-[#6B7370] font-semibold uppercase text-xs tracking-wider">Top Category</p>
-            <p className="text-3xl font-semibold mt-3 text-[#1A2E2A]">{stats.topCategory}</p>
-            <p className="text-sm text-[#6B7370] mt-1">Highest expenditure area</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Left Column: Input Form & Chart */}
-          <section className="lg:col-span-4 space-y-6">
-            {/* Form Card */}
-            <div className="bg-[#DCEAE0] rounded-2xl p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <span className="text-xs uppercase tracking-wider font-semibold text-[#0F6E56]">Record Expense</span>
-                <span className="text-[#0F6E56]">→</span>
-              </div>
-              
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-[#1A2E2A]/70">Amount ($)</label>
-                  <input 
-                    name="amount" 
-                    type="number" 
-                    step="0.01" 
-                    placeholder="0.00" 
-                    required 
-                    className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-[#1A2E2A] placeholder:text-gray-400 outline-none transition-all duration-200 focus:ring-2 focus:ring-[#0F6E56]/20 focus:border-[#0F6E56]" 
-                  />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+          <section className="lg:col-span-5 space-y-8">
+            <div className="bg-zinc-900/40 border border-zinc-800 p-8 rounded-[2rem] shadow-2xl backdrop-blur-sm">
+              <h2 className="text-lg font-bold mb-6 flex items-center gap-2"><Plus className="w-4 h-4 text-blue-500" /> New Transaction</h2>
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-zinc-500">Amount</label>
+                    <input 
+                      name="amount" type="number" step="0.01" min="0.01" 
+                      onKeyDown={(e) => { if (e.key === '-') e.preventDefault(); }}
+                      required className="w-full bg-zinc-800/50 border border-zinc-700 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-600 text-white font-mono" 
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-zinc-500">Category</label>
+                    <select name="category" required className="w-full bg-zinc-800/50 border border-zinc-700 p-4 rounded-2xl outline-none font-bold text-sm">
+                      <option value="Food">Food</option>
+                      <option value="Transport">Transport</option>
+                      <option value="Rent">Rent</option>
+                      <option value="Utilities">Utilities</option>
+                    </select>
+                  </div>
                 </div>
-                
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-[#1A2E2A]/70">Category</label>
-                  <select 
-                    name="category" 
-                    required 
-                    className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-[#1A2E2A] outline-none transition-all duration-200 focus:ring-2 focus:ring-[#0F6E56]/20 focus:border-[#0F6E56] appearance-none"
-                  >
-                    <option value="Food">Food</option>
-                    <option value="Transport">Transport</option>
-                    <option value="Rent">Rent</option>
-                    <option value="Entertainment">Entertainment</option>
-                    <option value="Utilities">Utilities</option>
-                  </select>
-                </div>
-                
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-[#1A2E2A]/70">Description</label>
-                  <input 
-                    name="description" 
-                    placeholder="e.g., Weekly Groceries" 
-                    required 
-                    className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-[#1A2E2A] placeholder:text-gray-400 outline-none transition-all duration-200 focus:ring-2 focus:ring-[#0F6E56]/20 focus:border-[#0F6E56]" 
-                  />
-                </div>
-                
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-[#1A2E2A]/70">Date</label>
-                  <input 
-                    name="date" 
-                    type="date" 
-                    required 
-                    defaultValue={new Date().toISOString().split('T')[0]} 
-                    className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-[#1A2E2A] outline-none transition-all duration-200 focus:ring-2 focus:ring-[#0F6E56]/20 focus:border-[#0F6E56]" 
-                  />
-                </div>
-                
-                <button 
-                  disabled={submitting}
-                  className="w-full bg-[#1A2E2A] text-white py-3 rounded-lg font-semibold hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0 transition-all duration-200"
-                >
-                  {submitting ? 'Securing Data...' : 'Add Transaction'}
+                <input name="description" placeholder="Description" required className="w-full bg-zinc-800/50 border border-zinc-700 p-4 rounded-2xl outline-none" />
+                <input name="date" type="date" required className="w-full bg-zinc-800/50 border border-zinc-700 p-4 rounded-2xl outline-none" defaultValue={new Date().toISOString().split('T')[0]} />
+                <button disabled={submitting} className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-black uppercase transition-all shadow-lg shadow-blue-900/20 active:scale-95">
+                  {submitting ? <Loader2 className="mx-auto animate-spin" /> : "Commit Transaction"}
                 </button>
               </form>
             </div>
-
-            {/* Pie Chart Card */}
-            <div className="bg-white border border-gray-200/60 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-6 h-72">
-              <h3 className="text-xs font-semibold text-[#6B7370] uppercase tracking-wider mb-4">Spend Breakdown</h3>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie 
-                    data={stats.chartData} 
-                    innerRadius={55} 
-                    outerRadius={75} 
-                    paddingAngle={5} 
-                    dataKey="value"
-                  >
-                    {stats.chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#FFFFFF', 
-                      border: '1px solid rgba(0,0,0,0.08)', 
-                      borderRadius: '12px',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                      fontSize: '12px'
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+            
+            <div className="bg-zinc-900/20 border border-zinc-800 rounded-[2rem] p-6 space-y-4">
+               <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2"><BarChart3 className="w-3 h-3" /> Spending Velocity</h3>
+               <div className="h-[180px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.chartData}>
+                    <XAxis dataKey="date" hide />
+                    <Tooltip cursor={{fill: 'transparent'}} contentStyle={{backgroundColor: '#18181b', border: 'none', borderRadius: '12px'}} />
+                    <Bar dataKey="amount">
+                      {stats.chartData.map((_, i) => <Cell key={i} fill={i === stats.chartData.length - 1 ? '#3b82f6' : '#27272a'} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+               </div>
             </div>
           </section>
 
-          {/* Right Column: List & Filters */}
-          <section className="lg:col-span-8 space-y-6">
-            {/* Filter/Sort Controls */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <h2 className="text-lg font-semibold tracking-tight">Recent History</h2>
-              
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Category Pills */}
-                <div className="flex flex-wrap gap-1.5">
-                  {categories.map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => setCategoryFilter(cat)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors duration-200 ${
-                        categoryFilter === cat 
-                          ? 'bg-[#DCEAE0] text-[#0F6E56]' 
-                          : 'bg-white border border-gray-200/60 text-[#6B7370] hover:bg-gray-50'
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
-                
-                {/* Sort Select */}
-                <div className="relative">
-                  <select 
-                    onChange={(e) => setSortOrder(e.target.value)} 
-                    value={sortOrder}
-                    className="appearance-none bg-white border border-gray-200/60 rounded-full px-3 py-1.5 pr-8 text-xs font-medium text-[#1A2E2A] outline-none cursor-pointer hover:bg-gray-50 transition-colors duration-200"
-                  >
-                    <option value="date_desc">Newest First</option>
-                    <option value="date_asc">Oldest First</option>
-                  </select>
-                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6B7370] text-[10px] pointer-events-none">▼</span>
-                </div>
-              </div>
+          <section className="lg:col-span-7 space-y-6">
+            <div className="flex justify-between bg-zinc-900/40 border border-zinc-800 p-4 rounded-2xl">
+               <select onChange={(e) => setCategoryFilter(e.target.value)} className="bg-transparent text-[10px] font-black text-zinc-400 uppercase outline-none cursor-pointer">
+                 <option value="All">All Categories</option>
+                 <option value="Food">Food</option>
+                 <option value="Transport">Transport</option>
+               </select>
+               <select onChange={(e) => setSortOrder(e.target.value)} className="bg-transparent text-[10px] font-black text-zinc-400 uppercase outline-none cursor-pointer">
+                 <option value="date_desc">Newest First</option>
+                 <option value="date_asc">Oldest Records</option>
+               </select>
             </div>
 
-            {/* Table Card */}
-            <div className="bg-white border border-gray-200/60 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="px-5 py-4 text-[10px] font-semibold uppercase tracking-widest text-[#6B7370]">Transaction Date</th>
-                    <th className="px-5 py-4 text-[10px] font-semibold uppercase tracking-widest text-[#6B7370]">Details</th>
-                    <th className="px-5 py-4 text-[10px] font-semibold uppercase tracking-widest text-[#6B7370] text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={3} className="px-5 py-16 text-center text-[#6B7370]">
-                        <div className="flex flex-col items-center gap-3">
-                          <div className="w-6 h-6 border-2 border-[#DCEAE0] border-t-[#0F6E56] rounded-full animate-spin"></div>
-                          <span className="text-sm">Synchronizing with API...</span>
+            <div className="space-y-3">
+              <AnimatePresence mode="popLayout">
+                {loading ? (
+                   <div className="py-20 text-center text-zinc-600 font-mono text-[10px] uppercase animate-pulse">Synchronizing Ledger...</div>
+                ) : expenses.length === 0 ? (
+                   <div className="py-20 text-center text-zinc-700 font-mono text-[10px] uppercase border-2 border-dashed border-zinc-800 rounded-3xl">Empty Archive</div>
+                ) : (
+                  expenses.map((expense) => (
+                    <motion.div layout initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} key={expense.id} className="group bg-zinc-900/40 border border-zinc-800 p-5 rounded-2xl flex justify-between items-center hover:border-zinc-500 transition-all backdrop-blur-sm">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-3">
+                          <p className="font-bold text-zinc-200">{expense.description}</p>
+                          <span className="px-2 py-0.5 bg-zinc-800 text-zinc-500 rounded text-[9px] font-black uppercase">{expense.category}</span>
                         </div>
-                      </td>
-                    </tr>
-                  ) : expenses.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="px-5 py-16 text-center">
-                        <div className="flex flex-col items-center gap-2">
-                          <p className="text-[#6B7370] text-sm">No records found for this view.</p>
-                          <p className="text-[#6B7370]/60 text-xs">Add your first expense to get started →</p>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    expenses.map((expense: any, index: number) => (
-                      <tr 
-                        key={expense.id} 
-                        className={`group transition-colors duration-200 hover:bg-[#F7F8F5] ${
-                          index !== expenses.length - 1 ? 'border-b border-gray-100' : ''
-                        }`}
-                      >
-                        <td className="px-5 py-4 whitespace-nowrap">
-                          <p className="text-sm font-medium text-[#1A2E2A]">{formatDate(expense.date)}</p>
-                          <p className="text-xs text-[#6B7370] mt-0.5">Recorded {formatDate(expense.createdAt)}</p>
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className="inline-block px-3 py-1 bg-[#DCEAE0] text-[#0F6E56] rounded-full text-xs font-medium mb-1.5">
-                            {expense.category}
-                          </span>
-                          <p className="text-sm font-medium text-[#1A2E2A]">{expense.description}</p>
-                        </td>
-                        <td className="px-5 py-4 text-right">
-                          <p className="text-base font-medium text-[#1A2E2A] tabular-nums">{formatCurrency(expense.amount / 100)}</p>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                        <p className="text-[10px] text-zinc-500 font-mono uppercase">{formatDate(expense.date)} • <CheckCircle2 className="inline w-2.5 h-2.5 text-blue-500/40" /> Verified</p>
+                      </div>
+                      <p className="text-xl font-mono font-bold text-white tracking-tighter">{formatCurrency(expense.amount / 100)}</p>
+                    </motion.div>
+                  ))
+                )}
+              </AnimatePresence>
             </div>
           </section>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
-

@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     });
     return NextResponse.json(expenses);
   } catch (error) {
-    return NextResponse.json({ error: "Fetch failed" }, { status: 500 });
+    return NextResponse.json({ error: "Sync Error" }, { status: 500 });
   }
 }
 
@@ -26,7 +26,17 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { amount, category, description, date, clientReferenceId } = body;
 
-    // 1. Resilience Check: If this ID already exists, don't create it again!
+    // 1. Constraint: Block zero or negative values
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return NextResponse.json({ error: "Invalid amount. Must be positive." }, { status: 400 });
+    }
+
+    if (!category || !description || !date) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // 2. Idempotency Check
     if (clientReferenceId) {
       const existing = await prisma.expense.findUnique({
         where: { clientReferenceId },
@@ -34,10 +44,10 @@ export async function POST(request: Request) {
       if (existing) return NextResponse.json(existing);
     }
 
-    // 2. Creation: Using 'amount' to match our new schema
+    // 3. Database Creation
     const expense = await prisma.expense.create({
       data: {
-        amount: Math.round(parseFloat(amount) * 100),
+        amount: Math.round(parsedAmount * 100), // Integer storage (cents)
         category,
         description,
         date: new Date(date),
@@ -47,7 +57,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(expense, { status: 201 });
   } catch (error: any) {
-    console.error("API_ERROR:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("PRISMA_POST_ERROR:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

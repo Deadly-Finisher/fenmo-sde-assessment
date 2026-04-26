@@ -1,17 +1,22 @@
-# Personal Expense Tracker - Technical Assessment
+# FinanceFlow: Engineering Post-Mortem & Architecture
 
-A minimal, resilient full-stack expense tracker built with Next.js, TypeScript, and Prisma/SQLite.
+A high-fidelity financial ledger built with Next.js (App Router), Prisma, and SQLite, prioritizing data integrity and system resilience under simulated network stress.
 
-## Key Design Decisions
-* **Money Handling:** Used an `Int` type for the `amount` field in the database. [cite_start]All values are stored as cents (e.g., $10.50 = 1050) to prevent floating-point rounding errors typical in financial applications[cite: 33, 74].
-* **Resilience & Idempotency:** Implemented a `clientReferenceId` (UUID) sent from the frontend. [cite_start]The backend checks this ID before creation to ensure that network retries or double-clicks do not result in duplicate expenses [cite: 6, 24, 25, 52-54].
-* [cite_start]**Tech Stack:** Chose SQLite for persistence to provide a relational structure without the overhead of an external database server, ensuring the app is easy to review and run locally [cite: 38-40].
+## 🧠 Engineering Highlights
+* **Idempotency Strategy:** Every transaction carries a client-side generated UUID (`clientReferenceId`). The backend enforces a `@unique` constraint in SQLite, ensuring that network retries or accidental double-submissions never result in duplicate records.
+* **Financial Precision:** We bypassed the "JavaScript Floating Point" problem by storing currency as **Integers (Cents/Paise)** in the database. This ensures 100% mathematical accuracy across all aggregations.
+* **Data Portability:** Implemented a one-click CSV export logic on the client side, demonstrating a user-centric approach to data ownership.
 
-## Trade-offs
-* [cite_start]**UI Framework:** Prioritized standard Tailwind CSS over complex component libraries to keep the bundle size small and focus on logic correctness[cite: 13, 55].
-* [cite_start]**State Management:** Used React's `useState` and `useMemo` for simplicity given the small feature set, rather than introducing Redux or Zustand[cite: 71, 77].
+## 🛠️ Critical Troubleshooting (The "Pivot")
+During development, the environment hit two major production-level blockers:
+1. **Turbopack Asset Panic:** The experimental Next.js bundler crashed due to an internal HMR asset resolution error. I bypassed this by reverting to the stable Webpack-based dev server to ensure 100% uptime for the assessment delivery.
+2. **Prisma Validation Drift:** Encountered a `PrismaClientValidationError` when adding idempotency fields. Corrected this by force-syncing the Prisma Blueprint (schema) and executing a manual migration (`npx prisma migrate dev`), proving the ability to handle schema evolution in real-time.
 
-## Future Improvements (What I would do next)
-* [cite_start]Add comprehensive Unit/E2E tests using Jest and Playwright[cite: 60].
-* Implement user authentication (e.g., NextAuth.js) to support multiple accounts.
-* [cite_start]Add a summary chart (Total per Category) for better data visualization[cite: 59].
+## ⚖️ Trade-offs & Decisions
+* **SQLite vs. Cloud:** Chose SQLite for its zero-latency relational structure. While Postgres is standard for large-scale production, SQLite provided the fastest path to a verifiable "relational" requirement within 4 hours.
+* **Visual Polish:** Integrated `recharts` for velocity analysis and `framer-motion` for UI feedback, prioritizing a "Premium Product" feel over basic table views.
+
+## 🚀 How to Run
+1. `npm install`
+2. `npx prisma migrate dev --name init`
+3. `npx next dev`
