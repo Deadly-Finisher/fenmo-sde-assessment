@@ -1,36 +1,17 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Personal Expense Tracker - Technical Assessment
 
-## Getting Started
+A minimal, resilient full-stack expense tracker built with Next.js, TypeScript, and Prisma/SQLite.
 
-First, run the development server:
+## Key Design Decisions
+* **Money Handling:** Used an `Int` type for the `amount` field in the database. [cite_start]All values are stored as cents (e.g., $10.50 = 1050) to prevent floating-point rounding errors typical in financial applications[cite: 33, 74].
+* **Resilience & Idempotency:** Implemented a `clientReferenceId` (UUID) sent from the frontend. [cite_start]The backend checks this ID before creation to ensure that network retries or double-clicks do not result in duplicate expenses [cite: 6, 24, 25, 52-54].
+* [cite_start]**Tech Stack:** Chose SQLite for persistence to provide a relational structure without the overhead of an external database server, ensuring the app is easy to review and run locally [cite: 38-40].
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Trade-offs
+* [cite_start]**UI Framework:** Prioritized standard Tailwind CSS over complex component libraries to keep the bundle size small and focus on logic correctness[cite: 13, 55].
+* [cite_start]**State Management:** Used React's `useState` and `useMemo` for simplicity given the small feature set, rather than introducing Redux or Zustand[cite: 71, 77].
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Future Improvements (What I would do next)
+* [cite_start]Add comprehensive Unit/E2E tests using Jest and Playwright[cite: 60].
+* Implement user authentication (e.g., NextAuth.js) to support multiple accounts.
+* [cite_start]Add a summary chart (Total per Category) for better data visualization[cite: 59].
