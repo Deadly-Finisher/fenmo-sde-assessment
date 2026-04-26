@@ -4,15 +4,16 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
+  url      = env("DATABASE_URL")
 }
 
 model Expense {
   id                String   @id @default(cuid())
-  amount            Int      
+  amount            Int      // Stored in cents/paise for financial precision
   category          String
   description       String
   date              DateTime
+  // This is the "secret sauce" for resilience - it must be unique!
+  clientReferenceId String?  @unique 
   createdAt         DateTime @default(now())
-  clientReferenceId String?  @unique
 }
