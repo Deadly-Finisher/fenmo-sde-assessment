@@ -1,63 +1,50 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-export async function GET(request: Request) {
+// GET: Fetch all expenses for the dashboard
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url);
-    const category = searchParams.get("category");
-    const sort = searchParams.get("sort");
-
     const expenses = await prisma.expense.findMany({
-      where: {
-        category: category && category !== 'All' ? category : undefined,
-      },
-      orderBy: {
-        date: sort === "date_asc" ? "asc" : "desc",
-      },
+      orderBy: { date: "desc" },
     });
     return NextResponse.json(expenses);
   } catch (error) {
-    return NextResponse.json({ error: "Sync Error" }, { status: 500 });
+    console.error("[DATABASE_GET_ERROR]:", error);
+    return NextResponse.json({ error: "Failed to fetch expenses" }, { status: 500 });
   }
 }
 
-export async function POST(request: Request) {
+// POST: Create a new expense
+export async function POST(req: Request) {
   try {
-    const body = await request.json();
-    const { amount, category, description, date, clientReferenceId } = body;
+    const body = await req.json();
 
-    // 1. Constraint: Block zero or negative values
-    const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      return NextResponse.json({ error: "Invalid amount. Must be positive." }, { status: 400 });
+    // POSTGRES FIX: Force amount to be a clean Integer (Paise/Cents)
+    // If user sends 10.50, it becomes 1050. If they send 10, it becomes 1000.
+    const amountInCents = Math.round(parseFloat(body.amount) * 100);
+
+    if (isNaN(amountInCents)) {
+      return NextResponse.json({ error: "Invalid amount format" }, { status: 400 });
     }
 
-    if (!category || !description || !date) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-    }
-
-    // 2. Idempotency Check
-    if (clientReferenceId) {
-      const existing = await prisma.expense.findUnique({
-        where: { clientReferenceId },
-      });
-      if (existing) return NextResponse.json(existing);
-    }
-
-    // 3. Database Creation
     const expense = await prisma.expense.create({
       data: {
-        amount: Math.round(parsedAmount * 100), // Integer storage (cents)
-        category,
-        description,
-        date: new Date(date),
-        clientReferenceId,
+        amount: amountInCents,
+        category: body.category || "General",
+        description: body.description || "",
+        date: new Date(body.date || new Date()),
+        // clientReferenceId is required by our schema
+        clientReferenceId: body.clientReferenceId || crypto.randomUUID(),
       },
     });
 
-    return NextResponse.json(expense, { status: 201 });
+    return NextResponse.json(expense);
   } catch (error: any) {
-    console.error("PRISMA_POST_ERROR:", error);
+    console.error("[DATABASE_POST_ERROR]:", error);
+    // If Prisma throws a unique constraint error on clientReferenceId
+    if (error.code === 'P2002') {
+      return NextResponse.json({ error: "Duplicate transaction" }, { status: 400 });
+    }
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
